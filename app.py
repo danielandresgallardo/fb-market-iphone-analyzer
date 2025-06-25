@@ -31,6 +31,9 @@ print(f"Loaded {len(all_data)} listings from {data_dir}")
 def extract_model(title):
     title_clean = title.lower()
 
+    # Fix typos: convert "i phone" or "i-phone" → "iphone"
+    title_clean = re.sub(r"i[\s\-]?phone", "iphone", title_clean)
+
     # Normalize spacing and hyphens
     title_clean = re.sub(r"[\s\-]+", " ", title_clean)
 
@@ -110,6 +113,10 @@ for item in all_data:
 
 # === DataFrame Creation ===
 df = pd.DataFrame(all_data)
+
+# Drop duplicates by link (only keep the first appearance)
+df = df.drop_duplicates(subset="link", keep="first")
+
 df_clean = df.dropna(subset=["price_num", "model", "storage"])
 df_clean = df_clean[(df_clean["model"] != "Unknown") & (df_clean["storage"] != "Unknown")]
 
