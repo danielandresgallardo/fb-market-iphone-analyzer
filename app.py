@@ -148,6 +148,22 @@ summary.to_csv(os.path.join(output_data_dir, "summary_stats.csv"), index=False)
 df_clean.to_csv(os.path.join(output_data_dir, "all_data_clean.csv"), index=False)
 outliers.to_csv(os.path.join(output_data_dir, "outliers.csv"), index=False)
 
+# Save excluded data (posts that were removed from df_clean)
+df_all = pd.DataFrame(all_data)
+df_all = df_all.drop_duplicates(subset="link", keep="first")
+
+# Add parsed model, storage, and price columns to df_all
+df_all["model"] = df_all["title"].apply(extract_model)
+df_all["storage"] = df_all["title"].apply(extract_storage)
+df_all["price_num"] = df_all["price"].apply(parse_price)
+
+# Keep the rows that did NOT end up in df_clean
+excluded = pd.concat([df_all, df_clean]).drop_duplicates(keep=False)
+excluded.to_csv("output/data/excluded_data.csv", index=False)
+
+print(f"Saved {len(df_clean)} valid listings to all_data_clean.csv")
+print(f"Saved {len(excluded)} excluded listings to excluded_data.csv")
+
 print("=== Summary Stats ===")
 print(summary)
 print("\n=== Possible Outliers ===")
