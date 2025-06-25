@@ -4,7 +4,6 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pathlib import Path
 
 # === Setup Directories ===
 data_dir = "data"
@@ -30,27 +29,75 @@ print(f"Loaded {len(all_data)} listings from {data_dir}")
 # === Data Extraction Functions ===
 
 def extract_model(title):
-    title = title.lower().replace(" ", "")
-    match = re.search(r"(1[0-6]|[6-9]|x[rs]?|se)(promax|pro|plus|mini)?", title)
-    if match:
-        model = match.group(1).upper()
-        variant = match.group(2)
-        variant_map = {
-            "promax": " Pro Max",
-            "pro": " Pro",
-            "plus": " Plus",
-            "mini": " mini"
-        }
-        variant_name = variant_map.get(variant, "") if variant else ""
-        return f"iPhone {model}{variant_name}".strip()
-    return "Unknown"
+    title_clean = title.lower()
+
+    # Normalize spacing and hyphens
+    title_clean = re.sub(r"[\s\-]+", " ", title_clean)
+
+    # Valid iPhone models
+    valid_models = ["6", "6s", "7", "8", "se", "x", "xs", "11", "12", "13", "14", "15", "16", "16e"]
+
+    # Regex pattern to match model and optional variant
+    pattern = re.compile(
+        r"iphone\s*(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?",
+        re.IGNORECASE
+    )
+
+    matches = pattern.findall(title_clean)
+    if not matches:
+        return "Unknown"
+
+    models = set()
+    variant_map = {
+        "promax": " Pro Max",
+        "pro max": " Pro Max",
+        "pro": " Pro",
+        "plus": " Plus",
+        "mini": " mini"
+    }
+
+    for model_raw, variant_raw in matches:
+        model_raw = model_raw.lower()
+        variant_raw = (variant_raw or "").replace(" ", "").lower()
+
+        model_num = model_raw.upper()
+
+        if model_num not in [m.upper() for m in valid_models]:
+            continue
+
+        if model_num == "16E":
+            model_str = "iPhone 16E"
+        else:
+            variant = variant_map.get(variant_raw, "")
+            model_str = f"iPhone {model_num}{variant}".strip()
+
+        models.add(model_str)
+
+    if len(models) == 1:
+        return models.pop()
+    elif len(models) > 1:
+        return "Multiple"
+    else:
+        return "Unknown"
+
 
 def extract_storage(title):
-    match = re.search(r'(\d{2,3})\s*(gb|g)', title.lower().replace(" ", ""))
-    return int(match.group(1)) if match else None
+    # Accept only sane storage sizes with optional g/gb suffix
+    match = re.search(r"\b(16|32|64|128|256|512)\s*g?b?\b", title.lower())
+    if match:
+        return int(match.group(1))
+    
+    # Match 1TB variants
+    if re.search(r"\b1\s*t?b\b", title):
+        return 1024  # in GB
+    
+    return "Unknown"
 
 def parse_price(price_str):
     try:
+        price_str = price_str.strip().lower()
+        if price_str in ["free", "0", "nt$0", "nt$0.00"]:
+            return 0
         return int(re.sub(r"[^\d]", "", price_str))
     except:
         return None
@@ -64,6 +111,7 @@ for item in all_data:
 # === DataFrame Creation ===
 df = pd.DataFrame(all_data)
 df_clean = df.dropna(subset=["price_num", "model", "storage"])
+df_clean = df_clean[(df_clean["model"] != "Unknown") & (df_clean["storage"] != "Unknown")]
 
 # === Outlier Detection ===
 def detect_outliers(group):
@@ -72,12 +120,16 @@ def detect_outliers(group):
     iqr = q3 - q1
     lower_bound = q1 - 1.5 * iqr
     upper_bound = q3 + 1.5 * iqr
-    return group[(group["price_num"] < lower_bound) | (group["price_num"] > upper_bound)]
+
+    # Treat price == 0 as an outlier explicitly
+    return group[(group["price_num"] < lower_bound) |
+                 (group["price_num"] > upper_bound) |
+                 (group["price_num"] == 0)]
 
 outliers = df_clean.groupby(["model", "storage"]).apply(detect_outliers).reset_index(drop=True)
 
 # === Summary Stats ===
-summary = df_clean.groupby(["model", "storage"]).agg(
+summary = df_clean[df_clean["price_num"] > 0].groupby(["model", "storage"]).agg(
     count=("price_num", "count"),
     min_price=("price_num", "min"),
     max_price=("price_num", "max"),
@@ -145,3 +197,6 @@ plt.title("Price vs Storage by iPhone Model")
 plt.tight_layout()
 plt.savefig(os.path.join(output_plots_dir, "scatter_price_vs_storage.png"))
 plt.close()
+
+print(f"Saved summary CSV and outlier CSV to {output_data_dir}")
+print(f"Saved 5 plots to {output_plots_dir}")
