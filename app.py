@@ -128,8 +128,14 @@ for item in all_data:
 # === DataFrame Creation ===
 df = pd.DataFrame(all_data)
 
-# Drop duplicates by link (only keep the first appearance)
-df = df.drop_duplicates(subset="link", keep="first")
+# Normalize links to remove tracking and query parameters
+def normalize_link(link):
+    return re.sub(r"\?.*$", "", link) if isinstance(link, str) else link
+
+df["normalized_link"] = df["link"].apply(normalize_link)
+
+# Drop duplicates based on the cleaned link (only keep the first appearance)
+df = df.drop_duplicates(subset="normalized_link", keep="first")
 
 # Optional: Filter obvious non-phone items (like phone cases)
 ACCESSORY_KEYWORDS = ["殼", "保護殼", "手機殼", "貼", "配件", "翻蓋", "外貿", "耳機", "充電"]
@@ -170,23 +176,27 @@ summary.to_csv(os.path.join(output_data_dir, "summary_stats.csv"), index=False)
 df_clean.to_csv(os.path.join(output_data_dir, "all_data_clean.csv"), index=False)
 outliers.to_csv(os.path.join(output_data_dir, "outliers.csv"), index=False)
 
-# Save excluded data (posts that were removed from df_clean)
-
 # === Identify and Annotate Excluded Listings ===
 
-# Step 1: Prepare base DataFrame with parsed columns
+# Step 1: Normalize all links by removing query parameters
+def normalize_link(link):
+    return re.sub(r"\?.*$", "", link) if isinstance(link, str) else link
+
 df_all = pd.DataFrame(all_data)
+df_all["link_normalized"] = df_all["link"].apply(normalize_link)
+
+# Add parsed columns
 df_all["model"] = df_all["title"].apply(extract_model)
 df_all["storage"] = df_all["title"].apply(extract_storage)
 df_all["price_num"] = df_all["price"].apply(parse_price)
 
 # Step 2: Mark duplicated links (excluding the first occurrence)
-duplicated_mask = df_all.duplicated(subset="link", keep="first")
+duplicated_mask = df_all.duplicated(subset="link_normalized", keep="first")
 duplicates = df_all[duplicated_mask].copy()
 duplicates["excluded_reason"] = "Duplicate link"
 
 # Step 3: Drop duplicates to simulate deduplication in df_clean
-df_all_unique = df_all.drop_duplicates(subset="link", keep="first")
+df_all_unique = df_all.drop_duplicates(subset="link_normalized", keep="first")
 
 # Step 4: Reapply exclusion criteria (after deduplication)
 def get_exclusion_reason(row):
@@ -224,7 +234,7 @@ print(outliers[["title", "model", "storage", "price_num", "location"]])
 sns.set(style="whitegrid")
 
 # 1. Boxplot of prices by model & storage
-plt.figure(figsize=(14, 6))
+plt.figure(figsize=(16, 10))
 sns.boxplot(data=df_clean, x="model", y="price_num", hue="storage")
 plt.xticks(rotation=45)
 plt.title("Price Distribution by iPhone Model and Storage")
@@ -235,7 +245,7 @@ plt.close()
 
 # 2. Barplot: Average price by model
 avg_price_by_model = df_clean.groupby("model")["price_num"].mean().sort_values()
-plt.figure(figsize=(12, 6))
+plt.figure(figsize=(16, 10))
 avg_price_by_model.plot(kind="barh", color="skyblue")
 plt.title("Average Price by iPhone Model")
 plt.xlabel("Average Price (NTD)")
@@ -243,19 +253,27 @@ plt.tight_layout()
 plt.savefig(os.path.join(output_plots_dir, "avg_price_by_model.png"))
 plt.close()
 
-# 3. Barplot: Number of listings per model
-model_counts = df_clean["model"].value_counts()
-plt.figure(figsize=(12, 6))
-model_counts.plot(kind="bar", color="orange")
-plt.title("Number of Listings per iPhone Model")
-plt.ylabel("Count")
-plt.xticks(rotation=45)
+# 3. Barplot: Top 20 iPhone models by average price
+avg_price_by_model = (
+    df_clean.groupby("model")["price_num"]
+    .mean()
+    .sort_values(ascending=False)
+    .head(20)
+)
+
+plt.figure(figsize=(16, 10))  # 16:10 aspect ratio
+
+avg_price_by_model.plot(kind="barh", color="skyblue")
+plt.title("Top 20 iPhone Models by Average Price")
+plt.xlabel("Average Price (NTD)")
+plt.ylabel("Model")
+plt.gca().invert_yaxis()  # Show most expensive at the top
 plt.tight_layout()
-plt.savefig(os.path.join(output_plots_dir, "count_per_model.png"))
+plt.savefig(os.path.join(output_plots_dir, "top20_avg_price_by_model.png"))
 plt.close()
 
 # 4. Histogram of prices
-plt.figure(figsize=(10, 5))
+plt.figure(figsize=(16, 10))
 sns.histplot(df_clean["price_num"], bins=30, kde=True)
 plt.title("Histogram of iPhone Listing Prices")
 plt.xlabel("Price (NTD)")
@@ -265,8 +283,12 @@ plt.savefig(os.path.join(output_plots_dir, "histogram_prices.png"))
 plt.close()
 
 # 5. Scatter plot of price vs storage (colored by model)
-plt.figure(figsize=(14, 6))
-sns.scatterplot(data=df_clean, x="storage", y="price_num", hue="model", alpha=0.6)
+plt.figure(figsize=(16, 10))
+df_plot = df_clean.copy()
+df_plot = df_plot[pd.to_numeric(df_plot["storage"], errors="coerce").notnull()]  # Remove "Unknown" or non-numeric
+df_plot["storage"] = df_plot["storage"].astype(int)
+
+sns.scatterplot(data=df_plot, x="storage", y="price_num", hue="model", alpha=0.6)
 plt.title("Price vs Storage by iPhone Model")
 plt.tight_layout()
 plt.savefig(os.path.join(output_plots_dir, "scatter_price_vs_storage.png"))
