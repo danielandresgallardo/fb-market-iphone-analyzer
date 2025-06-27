@@ -294,5 +294,29 @@ plt.tight_layout()
 plt.savefig(os.path.join(output_plots_dir, "scatter_price_vs_storage.png"))
 plt.close()
 
+# 6. Heatmap: Average Price by iPhone Model and Storage Size
+heatmap_data = (
+    df_clean[df_clean["price_num"] > 0]  # remove zero prices
+    .groupby(["model", "storage"])["price_num"]
+    .mean()
+    .unstack()  # Make storage sizes the columns
+)
+
+plt.figure(figsize=(16, 10))  # 16:10 aspect ratio
+sns.heatmap(
+    heatmap_data,
+    annot=True,
+    fmt=".0f",
+    cmap="YlGnBu",
+    linewidths=0.5,
+    linecolor="gray"
+)
+plt.title("Average iPhone Price by Model and Storage (NTD)")
+plt.xlabel("Storage (GB)")
+plt.ylabel("iPhone Model")
+plt.tight_layout()
+plt.savefig(os.path.join(output_plots_dir, "heatmap_model_vs_storage.png"))
+plt.close()
+
 print(f"Saved summary CSV and outlier CSV to {output_data_dir}")
-print(f"Saved 5 plots to {output_plots_dir}")
+print(f"Saved 6 plots to {output_plots_dir}")
