@@ -50,36 +50,51 @@ def extract_model(title):
     # Normalize spacing and hyphens
     title_clean = re.sub(r"[\s\-]+", " ", title_clean)
 
-    # Handle "i13" and similar compact forms
+    # Handle "i13" → "iphone 13"
     title_clean = re.sub(r"\bi ?(\d{1,2}[a-z]{0,2})\b", r"iphone \1", title_clean)
-
-    # Also try to match "16-128g" or "16 128g"
-    if "iphone" not in title_clean:
-        if re.search(r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\b", title_clean):
-            title_clean = "iphone " + title_clean
 
     # Valid iPhone models
     valid_models = ["6", "6s", "7", "8", "se", "x", "xs", "11", "12", "13", "14", "15", "16", "16e"]
 
-    # Regex pattern to match model and optional variant
-    pattern = re.compile(
-        r"iphone\s*(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?",
-        re.IGNORECASE
-    )
-
-    matches = pattern.findall(title_clean)
-    if not matches:
-        return "Unknown"
-
-    models = set()
     variant_map = {
         "promax": " Pro Max",
         "pro max": " Pro Max",
+        "pm": " Pro Max",
+        "p": " Pro",
         "pro": " Pro",
         "plus": " Plus",
         "mini": " mini"
     }
 
+    # === Pattern 1: Standard "iphone 15 pro max" ===
+    pattern1 = re.compile(
+        r"iphone\s*(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?",
+        re.IGNORECASE
+    )
+
+    # === Pattern 2: Model-only fallback e.g. "15 promax", "16pro", "14plus"
+    pattern2 = re.compile(
+        r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?\b",
+        re.IGNORECASE
+    )
+    # === Pattern 3: Ultra-compact like "13promax", "15pm", "14p"
+    pattern3 = re.compile(
+        r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)(promax|pm|pro|plus|p|mini)?\b",
+        re.IGNORECASE
+    )
+
+
+    matches = pattern1.findall(title_clean)
+    if not matches:
+        matches = pattern2.findall(title_clean)
+
+    if not matches:
+        matches = pattern3.findall(title_clean)
+
+    if not matches:
+        return "Unknown"
+
+    models = set()
     for model_raw, variant_raw in matches:
         model_raw = model_raw.lower()
         variant_raw = (variant_raw or "").replace(" ", "").lower()
