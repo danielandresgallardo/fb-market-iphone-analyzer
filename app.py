@@ -50,10 +50,13 @@ def extract_model(title):
     # Normalize spacing and hyphens
     title_clean = re.sub(r"[\s\-]+", " ", title_clean)
 
+    # Preprocess ultra-compact formats like "i16pro", "I16promax"
+    title_clean = re.sub(r"\bi[\s\-]?(\d{1,2}[a-z]?)(promax|pm|pro|plus|p|mini)?\b",
+                         r"iphone \1 \2", title_clean)
+
     # Handle "i13" → "iphone 13"
     title_clean = re.sub(r"\bi ?(\d{1,2}[a-z]{0,2})\b", r"iphone \1", title_clean)
 
-    # Valid iPhone models
     valid_models = ["6", "6s", "7", "8", "se", "x", "xs", "11", "12", "13", "14", "15", "16", "16e"]
 
     variant_map = {
@@ -66,30 +69,37 @@ def extract_model(title):
         "mini": " mini"
     }
 
-    # === Pattern 1: Standard "iphone 15 pro max" ===
+    # Pattern 1: Standard format
     pattern1 = re.compile(
         r"iphone\s*(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?",
         re.IGNORECASE
     )
 
-    # === Pattern 2: Model-only fallback e.g. "15 promax", "16pro", "14plus"
+    # Pattern 2: Just the model and variant without iphone
     pattern2 = re.compile(
         r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)\s*(pro max|promax|pro|plus|mini)?\b",
         re.IGNORECASE
     )
-    # === Pattern 3: Ultra-compact like "13promax", "15pm", "14p"
+
+    # Pattern 3: Ultra-compact like "13promax", "14pm"
     pattern3 = re.compile(
         r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)(promax|pm|pro|plus|p|mini)?\b",
         re.IGNORECASE
     )
 
+    # Pattern 4: Very loose fallback (e.g. "16promax", "13ProMax", no 'iphone' required)
+    pattern4 = re.compile(
+        r"\b(16e|xs|x|se|6s|6|7|8|11|12|13|14|15|16)[\s\-]?(promax|pm|pro max|pro|p|plus|mini)?\b",
+        re.IGNORECASE
+    )
 
     matches = pattern1.findall(title_clean)
     if not matches:
         matches = pattern2.findall(title_clean)
-
     if not matches:
         matches = pattern3.findall(title_clean)
+    if not matches:
+        matches = pattern4.findall(title_clean)
 
     if not matches:
         return "Unknown"
@@ -100,7 +110,6 @@ def extract_model(title):
         variant_raw = (variant_raw or "").replace(" ", "").lower()
 
         model_num = model_raw.upper()
-
         if model_num not in [m.upper() for m in valid_models]:
             continue
 
