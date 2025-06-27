@@ -318,7 +318,10 @@ plt.close()
 
 # 6. Heatmap: Average Price by iPhone Model and Storage Size
 heatmap_data = (
-    df_clean[df_clean["price_num"] > 0]  # remove zero prices
+    df_clean[
+        (df_clean["price_num"] > 0) &   # ✅ filter out zero prices
+        (df_clean["storage"].apply(lambda x: isinstance(x, (int, float))))  # ✅ filter out 'Unknown'
+    ]
     .groupby(["model", "storage"])["price_num"]
     .mean()
     .unstack()  # Make storage sizes the columns
@@ -340,5 +343,20 @@ plt.tight_layout()
 plt.savefig(os.path.join(output_plots_dir, "heatmap_model_vs_storage.png"))
 plt.close()
 
+# 7. Count of Listings per iPhone Model ===
+model_counts = df_clean["model"].value_counts().sort_values(ascending=True)
+
+plt.figure(figsize=(16, 10))  # 16:10 aspect ratio
+sns.barplot(x=model_counts.values, y=model_counts.index, palette="viridis")
+
+plt.title("Number of Listings per iPhone Model")
+plt.xlabel("Count")
+plt.ylabel("iPhone Model")
+plt.tight_layout()
+
+# Save the plot
+plt.savefig(os.path.join(output_plots_dir, "count_per_model_horizontal.png"))
+plt.close()
+
 print(f"Saved summary CSV and outlier CSV to {output_data_dir}")
-print(f"Saved 6 plots to {output_plots_dir}")
+print(f"Saved 7 plots to {output_plots_dir}")
