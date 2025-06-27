@@ -4,6 +4,7 @@ import re
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from datetime import datetime
 
 # === Setup Directories ===
 data_dir = "data"
@@ -15,11 +16,23 @@ os.makedirs(output_plots_dir, exist_ok=True)
 all_data = []
 
 # === Load JSON files ===
+
 for filename in os.listdir(data_dir):
     if filename.endswith(".json") and filename.startswith("marketplace"):
+        # Extract date portion like '2025-06-25' from filename
+        match = re.search(r"(\d{4}-\d{2}-\d{2})", filename)
+        file_date = None
+        if match:
+            try:
+                file_date = datetime.strptime(match.group(1), "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
         with open(os.path.join(data_dir, filename), "r", encoding="utf-8") as f:
             try:
                 file_data = json.load(f)
+                for item in file_data:
+                    item["date"] = file_date  # ✅ Attach the extracted date
                 all_data.extend(file_data)
             except Exception as e:
                 print(f"Error reading {filename}: {e}")
@@ -148,6 +161,13 @@ df = df[~df["title"].apply(is_probably_accessory)]
 df_clean = df.dropna(subset=["price_num", "model"])
 df_clean = df_clean[df_clean["model"] != "Unknown"]
 
+column_order = [
+    "title", "price", "location", "date",
+    "model", "storage", "price_num", "normalized_link"
+]
+
+df_clean = df_clean[column_order]
+
 # === Outlier Detection ===
 def detect_outliers(group):
     q1 = group["price_num"].quantile(0.25)
@@ -183,7 +203,7 @@ def normalize_link(link):
     return re.sub(r"\?.*$", "", link) if isinstance(link, str) else link
 
 df_all = pd.DataFrame(all_data)
-df_all["link_normalized"] = df_all["link"].apply(normalize_link)
+df_all["normalized_link"] = df_all["link"].apply(normalize_link)
 
 # Add parsed columns
 df_all["model"] = df_all["title"].apply(extract_model)
@@ -191,12 +211,12 @@ df_all["storage"] = df_all["title"].apply(extract_storage)
 df_all["price_num"] = df_all["price"].apply(parse_price)
 
 # Step 2: Mark duplicated links (excluding the first occurrence)
-duplicated_mask = df_all.duplicated(subset="link_normalized", keep="first")
+duplicated_mask = df_all.duplicated(subset="normalized_link", keep="first")
 duplicates = df_all[duplicated_mask].copy()
 duplicates["excluded_reason"] = "Duplicate link"
 
 # Step 3: Drop duplicates to simulate deduplication in df_clean
-df_all_unique = df_all.drop_duplicates(subset="link_normalized", keep="first")
+df_all_unique = df_all.drop_duplicates(subset="normalized_link", keep="first")
 
 # Step 4: Reapply exclusion criteria (after deduplication)
 def get_exclusion_reason(row):
@@ -218,6 +238,8 @@ non_duplicates_excluded = non_duplicates_excluded[non_duplicates_excluded["exclu
 
 # Step 6: Combine all exclusions
 excluded = pd.concat([duplicates, non_duplicates_excluded], ignore_index=True)
+
+excluded = excluded[["excluded_reason"] + column_order]
 
 # Step 7: Save to CSV
 excluded.to_csv("output/data/excluded_data.csv", index=False)
