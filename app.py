@@ -42,6 +42,23 @@ print(f"Loaded {len(all_data)} listings from {data_dir}")
 # === Data Extraction Functions ===
 
 def extract_model(title):
+
+    VALID_IPHONE_MODELS = {
+        "iPhone 3G", "iPhone 3GS", "iPhone 4", "iPhone 4S",
+        "iPhone 5", "iPhone 5C", "iPhone 5S",
+        "iPhone 6", "iPhone 6 Plus", "iPhone 6S", "iPhone 6S Plus",
+        "iPhone SE (Undefined)", "iPhone SE (1st generation)", "iPhone SE (2nd generation)", "iPhone SE (3rd generation)",
+        "iPhone 7", "iPhone 7 Plus",
+        "iPhone 8", "iPhone 8 Plus",
+        "iPhone X", "iPhone XR", "iPhone XS", "iPhone XS Max",
+        "iPhone 11", "iPhone 11 Pro", "iPhone 11 Pro Max",
+        "iPhone 12", "iPhone 12 mini", "iPhone 12 Pro", "iPhone 12 Pro Max",
+        "iPhone 13", "iPhone 13 mini", "iPhone 13 Pro", "iPhone 13 Pro Max",
+        "iPhone 14", "iPhone 14 Plus", "iPhone 14 Pro", "iPhone 14 Pro Max",
+        "iPhone 15", "iPhone 15 Plus", "iPhone 15 Pro", "iPhone 15 Pro Max",
+        "iPhone 16", "iPhone 16 Plus", "iPhone 16 Pro", "iPhone 16 Pro Max", "iPhone 16E"
+    }
+    
     title_clean = title.lower()
 
     # Fix typos: convert "i phone" or "i-phone" → "iphone"
@@ -118,6 +135,9 @@ def extract_model(title):
         else:
             variant = variant_map.get(variant_raw, "")
             model_str = f"iPhone {model_num}{variant}".strip()
+            
+        if model_str not in VALID_IPHONE_MODELS:
+            continue  # Skip invalid or partial matches
 
         models.add(model_str)
 
@@ -215,10 +235,14 @@ summary = df_clean[df_clean["price_num"] > 0].groupby(["model", "storage"]).agg(
     avg_price=("price_num", "mean")
 ).reset_index()
 
+# === Save title and predicitons for verification ===
+output_verification = df_clean[["title", "model", "storage"]]
+
 # === Save Outputs ===
 summary.to_csv(os.path.join(output_data_dir, "summary_stats.csv"), index=False)
 df_clean.to_csv(os.path.join(output_data_dir, "all_data_clean.csv"), index=False)
 outliers.to_csv(os.path.join(output_data_dir, "outliers.csv"), index=False)
+output_verification.to_csv(os.path.join(output_data_dir, "output_verification.csv"), index=False)
 
 # === Identify and Annotate Excluded Listings ===
 
